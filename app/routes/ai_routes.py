@@ -17,3 +17,18 @@ def research():
         return jsonify(result), 500
         
     return jsonify(result)
+
+@ai_bp.route('/leads', methods=['POST'])
+def leads():
+    data = request.json
+    prompt = data.get('prompt')
+    
+    if not prompt:
+        return jsonify({"error": "Prompt is required"}), 400
+        
+    result = ai_service.generate_leads(prompt)
+    
+    if "error" in result:
+        return jsonify(result), 500
+        
+    return jsonify(result)
