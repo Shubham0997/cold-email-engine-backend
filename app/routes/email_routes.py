@@ -50,11 +50,19 @@ def send_single_email():
 
 @email_bp.route('/track/open/<string:email_id>', methods=['GET'])
 def track_open(email_id):
-    logger.info(f"Tracking endpoint hit for email_id: {email_id}")
-    try:
-        service.track_open(email_id)
-    except Exception as e:
-        logger.error(f"Error tracking {email_id}: {e}")
+    ua = request.headers.get('User-Agent', 'Unknown')
+    referer = request.headers.get('Referer', 'None')
+    logger.info(f"Tracking hit for {email_id} | UA: {ua} | Referer: {referer}")
+    
+    # Filter out known prefetchers/proxies to avoid false opens
+    # GoogleImageProxy is the main one for Gmail
+    if "GoogleImageProxy" in ua or "Google-Proxy-Image-Transport" in ua:
+        logger.info(f"Ignoring tracking hit from Gmail Proxy/Prefetcher: {ua}")
+    else:
+        try:
+            service.track_open(email_id)
+        except Exception as e:
+            logger.error(f"Error tracking {email_id}: {e}")
     
     # 1x1 transparent PNG pixel representation
     pixel_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xfc\xff\xff\xff\x7f\x06\x04\x00\x08\x99\x01\x18\x83\x11\n\x0e\x00\x00\x00\x00IEND\xaeB`\x82'
