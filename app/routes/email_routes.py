@@ -62,11 +62,10 @@ def track_open(email_id):
     logger.info(f"--- TRACKING HIT END ---")
     
     # Comprehensive Bot/Prefetcher Filtering
+    # We REMOVE GoogleImageProxy from here because Gmail users always hit via this proxy.
+    # We will rely on the 5-second cooldown in the service layer instead.
     bot_keywords = [
-        "GoogleImageProxy", "Google-Proxy-Image-Transport", "Google-Apps-Scripter",
-        "Baiduspider", "Bingbot", "YahooMailProxy", "AolMailProxy", "Outlook-iOS",
-        "Microsoft Office", "Apache-HttpClient", "Python-urllib", "node-fetch",
-        "Chrome/42.0.2311.135 Safari/537.36 Edge/12.246" # Google's stealth prefetcher
+        "Baiduspider", "Bingbot", "Apache-HttpClient", "Python-urllib", "node-fetch"
     ]
     
     is_bot = any(keyword in ua for keyword in bot_keywords)
