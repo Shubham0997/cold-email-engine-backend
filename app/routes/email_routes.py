@@ -81,7 +81,6 @@ def track_open(email_id):
     # 1x1 transparent PNG pixel representation
     pixel_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xfc\xff\xff\xff\x7f\x06\x04\x00\x08\x99\x01\x18\x83\x11\n\x0e\x00\x00\x00\x00IEND\xaeB`\x82'
     
-    from flask import Response
     response = Response(pixel_data, mimetype='image/png')
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, post-check=0, pre-check=0'
     response.headers['Pragma'] = 'no-cache'
