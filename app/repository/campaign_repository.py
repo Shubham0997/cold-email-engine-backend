@@ -1,6 +1,7 @@
 import logging
 from app.domain.models import Campaign, CampaignRecipient, db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 
 class CampaignRepository:
     def create(self, campaign: Campaign) -> Campaign:
@@ -14,10 +15,13 @@ class CampaignRepository:
             raise
     
     def get_by_id(self, campaign_id: str) -> Campaign:
-        return db.session.get(Campaign, campaign_id)
+        return db.session.query(Campaign).options(joinedload(Campaign.recipients)).filter_by(id=campaign_id).first()
 
     def get_all(self) -> list[Campaign]:
-        return db.session.query(Campaign).order_by(Campaign.created_at.desc()).all()
+        return db.session.query(Campaign).options(joinedload(Campaign.recipients)).order_by(Campaign.created_at.desc()).all()
+
+    def get_by_name(self, name: str) -> Campaign:
+        return db.session.query(Campaign).options(joinedload(Campaign.recipients)).filter_by(name=name).first()
 
     def add_recipient(self, recipient: CampaignRecipient) -> CampaignRecipient:
         try:
@@ -47,4 +51,19 @@ class CampaignRepository:
         except SQLAlchemyError as e:
             db.session.rollback()
             logging.error(f"Error deleting recipients: {e}")
+            raise
+
+    def delete(self, campaign_id: str):
+        try:
+            # SQLAlchemy handle cascade if configured, but let's be explicit
+            self.delete_recipients_by_campaign_id(campaign_id)
+            campaign = self.get_by_id(campaign_id)
+            if campaign:
+                db.session.delete(campaign)
+                db.session.commit()
+                return True
+            return False
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logging.error(f"Error deleting campaign: {e}")
             raise

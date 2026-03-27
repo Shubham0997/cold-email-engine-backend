@@ -6,12 +6,12 @@ class Email(db.Model):
     __tablename__ = 'emails'
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    recipient_email = db.Column(db.String(255), nullable=False)
+    recipient_email = db.Column(db.String(255), nullable=False, index=True)
     subject = db.Column(db.String(255), default="Quick Message")
     body = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(50), default="PENDING") # PENDING, SENT, OPENED, FAILED
     opened_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def to_dict(self):
         return {
@@ -51,10 +51,10 @@ class CampaignRecipient(db.Model):
     __tablename__ = 'campaign_recipients'
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    campaign_id = db.Column(db.String(36), db.ForeignKey('campaigns.id'), nullable=False)
-    email = db.Column(db.String(255), nullable=False)
+    campaign_id = db.Column(db.String(36), db.ForeignKey('campaigns.id'), nullable=False, index=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
     status = db.Column(db.String(50), default="PENDING") # PENDING, SENT, FAILED
-    email_id = db.Column(db.String(36), db.ForeignKey('emails.id'), nullable=True) # Link to individual tracking record
+    email_id = db.Column(db.String(36), db.ForeignKey('emails.id'), nullable=True, index=True) # Link to individual tracking record
     email_record = db.relationship('Email', foreign_keys=[email_id], lazy=True)
 
     def to_dict(self):

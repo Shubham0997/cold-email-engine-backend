@@ -4,12 +4,29 @@ from email.mime.multipart import MIMEMultipart
 import os
 import logging
 import socket
-from app.domain.models import Email, CampaignRecipient
+from app.domain.models import Email, CampaignRecipient, Campaign
 from app.repository.email_repository import EmailRepository
 from app import db
 from datetime import datetime
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
+
+class SmtpConnectionContext:
+    def __init__(self, service: 'EmailService'):
+        self.service = service
+        self.server: any = None
+
+    def __enter__(self):
+        self.server = self.service._create_smtp_connection()
+        return self.server
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.server:
+            try:
+                self.server.quit()
+            except:
+                pass
 
 class EmailService:
     def __init__(self, repository: EmailRepository):
@@ -19,6 +36,10 @@ class EmailService:
         self.smtp_port = int(str(os.getenv('SMTP_PORT', '587')).strip())
         self.smtp_user = os.getenv('SMTP_USER', '').strip() or None
         self.smtp_pass = os.getenv('SMTP_PASS', '').strip() or None
+    
+    def smtp_connection(self):
+        """Returns a context manager for SMTP connection reuse."""
+        return SmtpConnectionContext(self)
     
     def construct_html(self, body: str, email_id: str) -> str:
         tracking_base = os.getenv('TRACKING_BASE_URL', 'http://localhost:5000')
@@ -41,8 +62,53 @@ class EmailService:
         self.repository.create(email_record)
         return email_record
 
-    def send_email_by_record(self, email_record: Email) -> Email:
-        """Sends an already registered email record via SMTP."""
+    def _create_smtp_connection(self):
+        """Creates and authenticates a fresh SMTP connection."""
+        if not (self.smtp_user and self.smtp_pass):
+            return None
+            
+        local_hostname = "cold-email-engine.local"
+        logger.info(f"Establishing SMTP connection to {self.smtp_host}:{self.smtp_port}")
+        
+        try:
+            try:
+                ip = socket.gethostbyname(self.smtp_host)
+            except Exception:
+                ip = "142.251.2.108" # Gmail fallback
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(10)
+            sock.connect((ip, self.smtp_port))
+            
+            if self.smtp_port == 465:
+                import ssl
+                context = ssl.create_default_context()
+                sock = context.wrap_socket(sock, server_hostname=self.smtp_host)
+                server = smtplib.SMTP_SSL(local_hostname=local_hostname)
+            else:
+                server = smtplib.SMTP(local_hostname=local_hostname)
+            
+            server._host = self.smtp_host # type: ignore
+            server.sock = sock
+            server.file = sock.makefile('rb')
+            
+            server.getreply()
+            server.ehlo_or_helo_if_needed()
+            
+            if self.smtp_port != 465:
+                server.starttls()
+                server.ehlo_or_helo_if_needed()
+            
+            server.login(self.smtp_user, self.smtp_pass)
+            logger.info("SMTP connection established and authenticated.")
+            return server
+            
+        except Exception as e:
+            logger.error(f"Failed to establish SMTP connection: {e}")
+            raise e
+
+    def send_email_by_record(self, email_record: Email, server=None) -> Email:
+        """Sends an email record. Optionally reuses an existing authenticated SMTP server."""
         recipient = email_record.recipient_email
         message = email_record.body
         subject = email_record.subject
@@ -59,68 +125,21 @@ class EmailService:
 
         try:
             if self.smtp_user and self.smtp_pass:
-                local_hostname = "cold-email-engine.local"
-                logger.info(f"Attempting manual socket connection to {self.smtp_host}:{self.smtp_port}")
-                
-                # Manual socket creation to bypass getaddrinfo EBUSY issue on Vercel
-                try:
-                    # Resolve IP with fallback to known Gmail SMTP IPs if DNS is broken on Vercel
-                    try:
-                        ip = socket.gethostbyname(self.smtp_host)
-                        logger.info(f"Resolved {self.smtp_host} to {ip}")
-                    except Exception as dns_err:
-                        logger.warning(f"DNS resolution failed for {self.smtp_host}: {dns_err}. Using fallback IP.")
-                        ip = "142.251.2.108" 
-                    
-                    # Create raw socket
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(10)
-                    sock.connect((ip, self.smtp_port))
-                    logger.info(f"Manual socket connection established with {ip}")
-                    
-                    if self.smtp_port == 465:
-                        # For Port 465 (SSL), we must wrap the socket in SSL FIRST
-                        import ssl
-                        context = ssl.create_default_context()
-                        sock = context.wrap_socket(sock, server_hostname=self.smtp_host)
-                        server = smtplib.SMTP_SSL(local_hostname=local_hostname)
-                    else:
-                        # For Port 587
-                        server = smtplib.SMTP(local_hostname=local_hostname)
-                    
-                    # Set _host manually for SSL verification compatibility (works in 3.11 and 3.12)
-                    server._host = self.smtp_host # type: ignore
-                    server.sock = sock
-                    server.file = sock.makefile('rb')
-                    
-                    # 1. Read the initial server banner (Crucial step!)
-                    code, msg_banner = server.getreply()
-                    logger.info(f"SMTP Banner: {code} {msg_banner}")
-                    
-                    # 2. Identify ourselves
-                    server.ehlo_or_helo_if_needed()
-                    
-                    if self.smtp_port != 465:
-                        # 3. Start TLS for port 587
-                        server.starttls()
-                        server.ehlo_or_helo_if_needed()
-                    
-                    with server:
-                        server.login(self.smtp_user, self.smtp_pass)
-                        logger.info("SMTP login successful, sending message...")
-                        server.send_message(msg)
-                        # Reset created_at to the ACTUAL sent time for accurate tracking cooldown
-                        email_record.created_at = datetime.utcnow()
-                
-                except Exception as sock_err:
-                    logger.error(f"Manual socket SMTP failed: {sock_err}")
-                    raise sock_err
-                
-                logger.info(f"Email {email_record.id} sent successfully to {recipient}")
+                if server:
+                    # Reuse connection
+                    server.send_message(msg)
+                    email_record.created_at = datetime.utcnow()
+                else:
+                    # One-off connection
+                    with self.smtp_connection() as conn:
+                        if conn:
+                            conn.send_message(msg)
+                            email_record.created_at = datetime.utcnow()
+                        else:
+                            logger.warning("SMTP credentials present but connection failed. Simulating send.")
             else:
                 logger.warning("SMTP credentials missing. Simulating successful send.")
             
-            # Update status to SENT ONLY if it wasn't already updated (e.g. to OPENED by a race condition)
             if email_record.status == "PENDING":
                 email_record.status = "SENT"
         except Exception as e:
@@ -172,30 +191,28 @@ class EmailService:
         return False
 
     def get_dashboard_stats(self) -> dict:
-        emails = self.repository.get_all()
-        total_emails = len(emails)
-        logger.info(f"Dashboard Stats: Fetched {total_emails} email records from database.")
-        opened_emails = sum(1 for e in emails if e.status == "OPENED")
+        # 1. High-level counts via SQL aggregations
+        total_emails = db.session.query(func.count(Email.id)).scalar() or 0
+        opened_emails = db.session.query(func.count(Email.id)).filter(Email.status == "OPENED").scalar() or 0
         open_rate = (opened_emails / total_emails * 100) if total_emails > 0 else 0
         
-        # Enrich emails with campaign info
+        logger.info(f"Dashboard Stats: Optimized aggregation (Total: {total_emails}, Opened: {opened_emails})")
+
+        # 2. Fetch enriched emails using a more efficient join
+        # We join Email with CampaignRecipient and Campaign to get everything in one query
+        results = (
+            db.session.query(Email, Campaign.id, Campaign.name)
+            .outerjoin(CampaignRecipient, CampaignRecipient.email_id == Email.id)
+            .outerjoin(Campaign, Campaign.id == CampaignRecipient.campaign_id)
+            .order_by(Email.created_at.desc())
+            .all()
+        )
+
         enriched_emails = []
-        for e in emails:
-            email_dict = e.to_dict()
-            try:
-                # Find associated campaign through CampaignRecipient
-                recipient = db.session.query(CampaignRecipient).filter_by(email_id=e.id).first()
-                if recipient and recipient.campaign:
-                    email_dict['campaign_id'] = recipient.campaign.id
-                    email_dict['campaign_name'] = recipient.campaign.name
-                else:
-                    email_dict['campaign_id'] = None
-                    email_dict['campaign_name'] = "Single Send"
-            except Exception as enrich_err:
-                logger.error(f"Failed to enrich email {e.id} with campaign data: {enrich_err}")
-                email_dict['campaign_id'] = None
-                email_dict['campaign_name'] = "Unknown"
-            
+        for email_obj, campaign_id, campaign_name in results:
+            email_dict = email_obj.to_dict()
+            email_dict['campaign_id'] = campaign_id
+            email_dict['campaign_name'] = campaign_name or "Single Send"
             enriched_emails.append(email_dict)
 
         return {

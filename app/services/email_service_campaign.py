@@ -12,6 +12,9 @@ class CampaignService:
         self.email_service = email_service
 
     def create_campaign(self, name: str, subject: str, body: str, recipient_emails: list[str]) -> Campaign:
+        if self.repository.get_by_name(name):
+            raise ValueError(f"A campaign with the name '{name}' already exists.")
+
         campaign = Campaign(
             name=name,
             subject=subject,
@@ -20,13 +23,13 @@ class CampaignService:
         )
         self.repository.create(campaign)
         
-        for email in recipient_emails:
-            recipient = CampaignRecipient(
-                campaign_id=campaign.id,
-                email=email,
-                status="PENDING"
-            )
-            self.repository.add_recipient(recipient)
+        # Bulk insert recipients
+        recipients = [
+            CampaignRecipient(campaign_id=campaign.id, email=email, status="PENDING")
+            for email in recipient_emails
+        ]
+        db.session.add_all(recipients)
+        db.session.commit()
             
         return campaign
 
@@ -40,44 +43,42 @@ class CampaignService:
         
         logger.info(f"Starting campaign: {campaign.name} ({campaign.id})")
         
-        for recipient in campaign.recipients:
-            if recipient.status != "PENDING":
-                logger.debug(f"Skipping recipient {recipient.email} (status: {recipient.status})")
-                continue
-            
-            try:
-                # Basic variable substitution: {{email}}
-                personalized_subject = campaign.subject.replace("{{email}}", recipient.email)
-                personalized_body = campaign.body.replace("{{email}}", recipient.email)
+        with self.email_service.smtp_connection() as server:
+            for recipient in campaign.recipients:
+                if recipient.status != "PENDING":
+                    logger.debug(f"Skipping recipient {recipient.email} (status: {recipient.status})")
+                    continue
                 
-                # 1. Register the email record immediately to get the tracking ID
-                email_record = self.email_service.register_email(
-                    recipient=recipient.email,
-                    message=personalized_body,
-                    subject=personalized_subject
-                )
-                
-                # 2. Link the recipient to the tracking ID and commit IMMEDIATELY
-                # This ensures that even if the pixel is hit during SMTP, the link exists!
-                recipient.email_id = email_record.id
-                db.session.commit()
-                
-                logger.info(f"Sending campaign email to {recipient.email} (ID: {email_record.id})...")
-                
-                # 3. Send via SMTP (the long-running part)
-                result = self.email_service.send_email_by_record(email_record)
-                
-                if result:
-                    recipient.status = result.status
-                    db.session.commit()
-                    logger.info(f"Email sent to {recipient.email}, final status: {result.status}")
-                
-            except Exception as e:
-                logger.error(f"Failed to send campaign email to {recipient.email}: {e}")
-                recipient.status = "FAILED"
+                try:
+                    # Basic variable substitution: {{email}}
+                    personalized_subject = campaign.subject.replace("{{email}}", recipient.email)
+                    personalized_body = campaign.body.replace("{{email}}", recipient.email)
+                    
+                    # 1. Register the email record immediately to get the tracking ID
+                    email_record = self.email_service.register_email(
+                        recipient=recipient.email,
+                        message=personalized_body,
+                        subject=personalized_subject
+                    )
+                    
+                    # 2. Link the recipient to the tracking ID
+                    recipient.email_id = email_record.id
+                    
+                    logger.info(f"Sending campaign email to {recipient.email} (ID: {email_record.id})...")
+                    
+                    # 3. Send via SMTP (the long-running part) - Pass the server for reuse!
+                    result = self.email_service.send_email_by_record(email_record, server=server)
+                    
+                    if result:
+                        recipient.status = result.status
+                    
+                except Exception as e:
+                    logger.error(f"Failed to send campaign email to {recipient.email}: {e}")
+                    recipient.status = "FAILED"
         
         campaign.status = "COMPLETED"
-        self.repository.update_campaign_status(campaign.id, "COMPLETED")
+        # One final commit for the whole campaign batch
+        db.session.commit()
         logger.info(f"Campaign completed: {campaign.name}")
 
     def get_all_campaigns(self) -> list[Campaign]:
@@ -98,6 +99,11 @@ class CampaignService:
         if not campaign:
             return None
         
+        # Check if new name is taken by another campaign
+        existing = self.repository.get_by_name(name)
+        if existing and existing.id != campaign_id:
+            raise ValueError(f"A campaign with the name '{name}' already exists.")
+
         campaign.name = name
         campaign.subject = subject
         campaign.body = body
@@ -138,3 +144,7 @@ class CampaignService:
         db.session.commit()
         logger.info(f"Campaign {campaign_id} reset to DRAFT. {reset_count} recipients set to PENDING.")
         return campaign
+
+    def delete_campaign(self, campaign_id: str) -> bool:
+        logger.info(f"Deleting campaign {campaign_id}...")
+        return self.repository.delete(campaign_id)

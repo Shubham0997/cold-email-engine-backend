@@ -31,9 +31,11 @@ def create_campaign():
     try:
         campaign = campaign_service.create_campaign(name, subject, body, recipients)
         return jsonify(campaign.to_dict()), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Failed to create campaign: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
 @campaign_bp.route('/campaigns', methods=['GET'])
 def get_campaigns():
@@ -85,9 +87,11 @@ def update_campaign(campaign_id):
         if not campaign:
             return jsonify({"error": "Campaign not found"}), 404
         return jsonify(campaign.to_dict()), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Failed to update campaign: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
 @campaign_bp.route('/campaigns/<campaign_id>/reset', methods=['POST'])
 def reset_campaign(campaign_id):
@@ -98,4 +102,14 @@ def reset_campaign(campaign_id):
         return jsonify(campaign.to_dict()), 200
     except Exception as e:
         logger.error(f"Failed to reset campaign: {e}")
+        return jsonify({"error": str(e)}), 500
+@campaign_bp.route('/campaigns/<campaign_id>', methods=['DELETE'])
+def delete_campaign(campaign_id):
+    try:
+        success = campaign_service.delete_campaign(campaign_id)
+        if not success:
+            return jsonify({"error": "Campaign not found"}), 404
+        return jsonify({"message": "Campaign deleted successfully"}), 200
+    except Exception as e:
+        logger.error(f"Failed to delete campaign: {e}")
         return jsonify({"error": str(e)}), 500
