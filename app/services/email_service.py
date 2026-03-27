@@ -48,27 +48,33 @@ class EmailService:
 
         try:
             if self.smtp_user and self.smtp_pass:
-                # Providing local_hostname often fixes [Errno 16] "Device or resource busy" in serverless environments
                 local_hostname = "cold-email-engine.local"
+                logger.info(f"Attempting to send email via {self.smtp_host}:{self.smtp_port} (User: {self.smtp_user})")
                 
                 if self.smtp_port == 465:
-                    # Use SSL for port 465
+                    logger.info("Using SMTP_SSL (Port 465)")
                     with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
+                        logger.info("SMTP_SSL connection established, attempting login...")
                         server.login(self.smtp_user, self.smtp_pass)
+                        logger.info("SMTP login successful, sending message...")
                         server.send_message(msg)
                 else:
-                    # Use STARTTLS for port 587 (default)
+                    logger.info(f"Using SMTP with STARTTLS (Port {self.smtp_port})")
                     with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
+                        logger.info("SMTP connection established, starting TLS...")
                         server.starttls()
+                        logger.info("STARTTLS successful, attempting login...")
                         server.login(self.smtp_user, self.smtp_pass)
+                        logger.info("SMTP login successful, sending message...")
                         server.send_message(msg)
+                
+                logger.info(f"Email {email_record.id} sent successfully to {recipient}")
             else:
                 logger.warning("SMTP credentials missing. Simulating successful send.")
             
             email_record.status = "SENT"
-            logger.info(f"Email {email_record.id} sent successfully to {recipient}")
         except Exception as e:
-            logger.error(f"Failed to send email {email_record.id}: {e}")
+            logger.error(f"Failed to send email {email_record.id}: {type(e).__name__}: {e}", exc_info=True)
             email_record.status = "FAILED"
         
         self.repository.update(email_record)
