@@ -48,11 +48,17 @@ class EmailService:
 
         try:
             if self.smtp_user and self.smtp_pass:
-                # Add timeout to prevent hanging in serverless environment
-                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
-                    server.starttls()
-                    server.login(self.smtp_user, self.smtp_pass)
-                    server.send_message(msg)
+                if self.smtp_port == 465:
+                    # Use SSL for port 465
+                    with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=10) as server:
+                        server.login(self.smtp_user, self.smtp_pass)
+                        server.send_message(msg)
+                else:
+                    # Use STARTTLS for port 587 (default)
+                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
+                        server.starttls()
+                        server.login(self.smtp_user, self.smtp_pass)
+                        server.send_message(msg)
             else:
                 logger.warning("SMTP credentials missing. Simulating successful send.")
             
