@@ -48,14 +48,17 @@ class EmailService:
 
         try:
             if self.smtp_user and self.smtp_pass:
+                # Providing local_hostname often fixes [Errno 16] "Device or resource busy" in serverless environments
+                local_hostname = "cold-email-engine.local"
+                
                 if self.smtp_port == 465:
                     # Use SSL for port 465
-                    with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=10) as server:
+                    with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
                         server.login(self.smtp_user, self.smtp_pass)
                         server.send_message(msg)
                 else:
                     # Use STARTTLS for port 587 (default)
-                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
+                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
                         server.starttls()
                         server.login(self.smtp_user, self.smtp_pass)
                         server.send_message(msg)
