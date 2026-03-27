@@ -32,9 +32,16 @@ class AIService:
 
         system_prompt = f"""
         You are a world-class cold email researcher and copywriter.
-        Based on the user's prompt, generate a professional, extensive, and theme-specific email subject and body.
+        Based on the user's prompt, generate a professional, extensive, and UX-friendly HTML email.
         
         {placeholder_guidance}
+        
+        HTML/CSS REQUIREMENTS:
+        - The 'body' must be a complete HTML snippet suitable for an email (inline CSS).
+        - Use a clean, modern layout: a centered container (max-width 600px), high-quality typography (sans-serif), and generous padding.
+        - Use a professional color palette. If the brand is coffee-related (like HeyyBrew), use warm tones (e.g., #f5f5f5 backgrounds, #4b3621 accents).
+        - Ensure call-to-action (CTA) links are styled as prominent, rounded buttons.
+        - The code should be responsive and clean.
         
         BRAND VOICE ANALYSIS:
         - Analyze the brand name, product, or URL mentioned in the prompt.
@@ -47,7 +54,7 @@ class AIService:
         - BODY: 
           1. Connect with the recipient's niche.
           2. Introduce the specific value proposition of the product or offering.
-          3. Clear Call-To-Action (CTA).
+          3. Clear Call-To-Action (CTA) as a beautiful button.
           
         Return ONLY a JSON object with 'subject' and 'body' keys.
         Do not include any other text or markdown formatting.
