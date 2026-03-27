@@ -101,6 +101,8 @@ class EmailService:
                         server.login(self.smtp_user, self.smtp_pass)
                         logger.info("SMTP login successful, sending message...")
                         server.send_message(msg)
+                        # Reset created_at to the ACTUAL sent time for accurate tracking cooldown
+                        email_record.created_at = datetime.utcnow()
                 
                 except Exception as sock_err:
                     logger.error(f"Manual socket SMTP failed: {sock_err}")
@@ -122,9 +124,9 @@ class EmailService:
         email = self.repository.get_by_id(email_id)
         if email:
             if email.status != "OPENED":
-                # FILTER: If hit happens within 5 seconds of creation, it's likely an automated delivery check
+                # FILTER: If hit happens within 15 seconds of creation, it's likely an automated delivery check
                 time_since_creation = (datetime.utcnow() - email.created_at).total_seconds()
-                if time_since_creation < 5:
+                if time_since_creation < 15:
                     logger.warning(f"Ignoring instant tracking hit (automated scan): {email_id} ({time_since_creation:.1f}s)")
                     return False
 
