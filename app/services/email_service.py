@@ -50,34 +50,40 @@ class EmailService:
         try:
             if self.smtp_user and self.smtp_pass:
                 local_hostname = "cold-email-engine.local"
-                logger.info(f"Attempting to send email via {self.smtp_host}:{self.smtp_port} (User: {self.smtp_user})")
+                logger.info(f"Attempting manual socket connection to {self.smtp_host}:{self.smtp_port}")
                 
-                # Manual resolution to IPv4 can bypass [Errno 16] DNS issues on Vercel
+                # Manual socket creation to bypass getaddrinfo EBUSY issue on Vercel
                 try:
-                    addr_info = socket.getaddrinfo(self.smtp_host, self.smtp_port, family=socket.AF_INET, type=socket.SOCK_STREAM)
-                    resolved_ip = addr_info[0][4][0]
-                    logger.info(f"Resolved {self.smtp_host} to {resolved_ip}")
-                    target_host = resolved_ip
-                except Exception as dns_err:
-                    logger.warning(f"Manual DNS resolution failed: {dns_err}. Falling back to hostname.")
-                    target_host = self.smtp_host
-
-                if self.smtp_port == 465:
-                    logger.info("Using SMTP_SSL (Port 465)")
-                    with smtplib.SMTP_SSL(target_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
-                        logger.info("SMTP_SSL connection established, attempting login...")
-                        server.login(self.smtp_user, self.smtp_pass)
-                        logger.info("SMTP login successful, sending message...")
-                        server.send_message(msg)
-                else:
-                    logger.info(f"Using SMTP with STARTTLS (Port {self.smtp_port})")
-                    with smtplib.SMTP(target_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
-                        logger.info("SMTP connection established, starting TLS...")
+                    # Resolve IP once
+                    ip = socket.gethostbyname(self.smtp_host)
+                    
+                    # Create raw socket
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(10)
+                    sock.connect((ip, self.smtp_port))
+                    logger.info(f"Manual socket connection established with {ip}")
+                    
+                    if self.smtp_port == 465:
+                        server = smtplib.SMTP_SSL(local_hostname=local_hostname)
+                        server.sock = sock
+                        server.file = sock.makefile('rb')
+                        # We need to call EHLO manually when injecting a socket
+                        server.helo() 
+                    else:
+                        server = smtplib.SMTP(local_hostname=local_hostname)
+                        server.sock = sock
+                        server.file = sock.makefile('rb')
+                        server.helo()
                         server.starttls()
-                        logger.info("STARTTLS successful, attempting login...")
+                    
+                    with server:
                         server.login(self.smtp_user, self.smtp_pass)
                         logger.info("SMTP login successful, sending message...")
                         server.send_message(msg)
+                
+                except Exception as sock_err:
+                    logger.error(f"Manual socket SMTP failed: {sock_err}")
+                    raise sock_err
                 
                 logger.info(f"Email {email_record.id} sent successfully to {recipient}")
             else:
