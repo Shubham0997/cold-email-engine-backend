@@ -51,10 +51,15 @@ def send_single_email():
 
 @email_bp.route('/track/open/<string:email_id>', methods=['GET'])
 def track_open(email_id):
-    ua = request.headers.get('User-Agent', 'Unknown')
-    referer = request.headers.get('Referer', 'None')
+    headers_dict = {k: v for k, v in request.headers.items()}
+    ua = headers_dict.get('User-Agent', 'Unknown')
     ip = request.remote_addr
-    logger.info(f"Tracking hit for {email_id} | IP: {ip} | UA: {ua} | Referer: {referer}")
+    
+    logger.info(f"--- TRACKING HIT START ---")
+    logger.info(f"Email ID: {email_id}")
+    logger.info(f"Client IP: {ip}")
+    logger.info(f"All Headers: {headers_dict}")
+    logger.info(f"--- TRACKING HIT END ---")
     
     # Comprehensive Bot/Prefetcher Filtering
     bot_keywords = [
