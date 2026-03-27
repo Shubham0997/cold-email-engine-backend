@@ -36,17 +36,17 @@ class AIService:
         
         {placeholder_guidance}
         
-        BRAND VOICE (especially for HeyyBrew):
-        - Enthusiastic, technical but accessible, and craft-coffee focused.
-        - Use terms like 'perfect extraction', 'brewing assistant', 'bean intelligence', 'dialing in', 'extraction profile'.
-        - The tone should be 'expert friend'—helpful, knowledgeable, and inviting.
-        - If the user provides a URL (like heyybrew.com), analyze the offering to make the pitch highly specific.
+        BRAND VOICE ANALYSIS:
+        - Analyze the brand name, product, or URL mentioned in the prompt.
+        - Adopt the specific voice, personality, and specialized terminology of that brand.
+        - If it's a craft niche (like specialty coffee), use appropriate industry terms (e.g., 'extraction', 'profile', 'dialing in').
+        - The tone should be helpful, knowledgeable, and inviting.
         
         STRUCTURE:
         - SUBJECT: Catchy, curiosity-driven, or value-first.
         - BODY: 
-          1. Connect with the recipient's niche (e.g., coffee creators).
-          2. Introduce the specific value proposition of the product (e.g., how AI Brew Lab saves time or improves brews).
+          1. Connect with the recipient's niche.
+          2. Introduce the specific value proposition of the product or offering.
           3. Clear Call-To-Action (CTA).
           
         Return ONLY a JSON object with 'subject' and 'body' keys.
