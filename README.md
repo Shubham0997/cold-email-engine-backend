@@ -49,7 +49,7 @@ erDiagram
     
     CAMPAIGNS {
         string id PK
-        string name UK
+        string name
         string subject
         text body
         string status
