@@ -31,7 +31,9 @@ def create_app():
     # Register blueprints (routes)
     from app.routes.email_routes import email_bp
     from app.routes.campaign_routes import campaign_bp
+    from app.routes.ai_routes import ai_bp
     app.register_blueprint(email_bp)
     app.register_blueprint(campaign_bp)
+    app.register_blueprint(ai_bp)
 
     return app
