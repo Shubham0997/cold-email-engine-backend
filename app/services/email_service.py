@@ -122,10 +122,16 @@ class EmailService:
         email = self.repository.get_by_id(email_id)
         if email:
             if email.status != "OPENED":
+                # FILTER: If hit happens within 5 seconds of creation, it's likely a bot/prefetcher
+                time_since_creation = (datetime.utcnow() - email.created_at).total_seconds()
+                if time_since_creation < 5:
+                    logger.warning(f"Ignoring instant tracking hit (likely prefetch/bot): {email_id} ({time_since_creation:.1f}s)")
+                    return False
+
                 email.status = "OPENED"
                 email.opened_at = datetime.utcnow()
                 self.repository.update(email)
-                logger.info(f"Email opened: {email_id}")
+                logger.info(f"Email opened: {email_id} after {time_since_creation:.1f}s")
                 return True
             else:
                 logger.info(f"Email {email_id} was already opened. Ignoring idempotently.")
