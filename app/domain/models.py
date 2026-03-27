@@ -28,7 +28,7 @@ class Campaign(db.Model):
     __tablename__ = 'campaigns'
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(255), nullable=False, unique=True)
     subject = db.Column(db.String(255), nullable=False)
     body = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(50), default="DRAFT") # DRAFT, SENDING, COMPLETED
