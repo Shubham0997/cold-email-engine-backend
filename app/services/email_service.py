@@ -70,6 +70,12 @@ class EmailService:
                     sock.connect((ip, self.smtp_port))
                     logger.info(f"Manual socket connection established with {ip}")
                     
+                    if self.smtp_port == 465:
+                        # For Port 465 (SSL), we must wrap the socket in SSL FIRST
+                        import ssl
+                        context = ssl.create_default_context()
+                        sock = context.wrap_socket(sock, server_hostname=self.smtp_host)
+                        server = smtplib.SMTP_SSL(local_hostname=local_hostname)
                     else:
                         # For Port 587
                         server = smtplib.SMTP(local_hostname=local_hostname)
