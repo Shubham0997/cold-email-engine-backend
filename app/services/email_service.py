@@ -48,7 +48,8 @@ class EmailService:
 
         try:
             if self.smtp_user and self.smtp_pass:
-                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                # Add timeout to prevent hanging in serverless environment
+                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
                     server.starttls()
                     server.login(self.smtp_user, self.smtp_pass)
                     server.send_message(msg)
