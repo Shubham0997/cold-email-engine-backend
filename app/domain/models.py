@@ -55,6 +55,7 @@ class CampaignRecipient(db.Model):
     email = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(50), default="PENDING") # PENDING, SENT, FAILED
     email_id = db.Column(db.String(36), db.ForeignKey('emails.id'), nullable=True) # Link to individual tracking record
+    email_record = db.relationship('Email', foreign_keys=[email_id], lazy=True)
 
     def to_dict(self):
         return {
@@ -62,5 +63,6 @@ class CampaignRecipient(db.Model):
             "campaign_id": self.campaign_id,
             "email": self.email,
             "status": self.status,
-            "email_id": self.email_id
+            "email_id": self.email_id,
+            "opened_at": self.email_record.opened_at.isoformat() + "Z" if self.email_record and self.email_record.opened_at else None
         }

@@ -42,6 +42,7 @@ class CampaignService:
         
         for recipient in campaign.recipients:
             if recipient.status != "PENDING":
+                logger.debug(f"Skipping recipient {recipient.email} (status: {recipient.status})")
                 continue
             
             try:
@@ -49,16 +50,27 @@ class CampaignService:
                 personalized_subject = campaign.subject.replace("{{email}}", recipient.email)
                 personalized_body = campaign.body.replace("{{email}}", recipient.email)
                 
-                # Send using existing EmailService (this creates an Email record for tracking)
-                result = self.email_service.send_single_email(
+                # 1. Register the email record immediately to get the tracking ID
+                email_record = self.email_service.register_email(
                     recipient=recipient.email,
                     message=personalized_body,
                     subject=personalized_subject
                 )
                 
+                # 2. Link the recipient to the tracking ID and commit IMMEDIATELY
+                # This ensures that even if the pixel is hit during SMTP, the link exists!
+                recipient.email_id = email_record.id
+                db.session.commit()
+                
+                logger.info(f"Sending campaign email to {recipient.email} (ID: {email_record.id})...")
+                
+                # 3. Send via SMTP (the long-running part)
+                result = self.email_service.send_email_by_record(email_record)
+                
                 if result:
                     recipient.status = result.status
-                    recipient.email_id = result.id
+                    db.session.commit()
+                    logger.info(f"Email sent to {recipient.email}, final status: {result.status}")
                 
             except Exception as e:
                 logger.error(f"Failed to send campaign email to {recipient.email}: {e}")
@@ -117,8 +129,10 @@ class CampaignService:
         campaign.status = "DRAFT"
         reset_count = 0
         for recipient in campaign.recipients:
+            logger.info(f"Resetting recipient {recipient.email} (Current status: {recipient.status})")
             recipient.status = "PENDING"
-            recipient.email_id = None # Break link to old tracking record if re-sending
+            recipient.email_id = None 
+            recipient.email_record = None # Explicitly clear relationship to old record
             reset_count += 1
             
         db.session.commit()

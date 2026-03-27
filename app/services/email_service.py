@@ -35,11 +35,18 @@ class EmailService:
         """
         return html
 
-    def send_single_email(self, recipient: str, message: str, subject: str = "Quick Message") -> Email:
+    def register_email(self, recipient: str, message: str, subject: str = "Quick Message") -> Email:
+        """Creates an email record in the DB and returns it (with ID) immediately."""
         email_record = Email(recipient_email=recipient, body=message, subject=subject, status="PENDING")
         self.repository.create(email_record)
+        return email_record
+
+    def send_email_by_record(self, email_record: Email) -> Email:
+        """Sends an already registered email record via SMTP."""
+        recipient = email_record.recipient_email
+        message = email_record.body
+        subject = email_record.subject
         
-        # ... later in the code ...
         html_content = self.construct_html(message, email_record.id)
 
         msg = MIMEMultipart("alternative")
@@ -113,7 +120,9 @@ class EmailService:
             else:
                 logger.warning("SMTP credentials missing. Simulating successful send.")
             
-            email_record.status = "SENT"
+            # Update status to SENT ONLY if it wasn't already updated (e.g. to OPENED by a race condition)
+            if email_record.status == "PENDING":
+                email_record.status = "SENT"
         except Exception as e:
             logger.error(f"Failed to send email {email_record.id}: {type(e).__name__}: {e}", exc_info=True)
             email_record.status = "FAILED"
@@ -121,13 +130,18 @@ class EmailService:
         self.repository.update(email_record)
         return email_record
 
+    def send_single_email(self, recipient: str, message: str, subject: str = "Quick Message") -> Email:
+        # Backward compatibility / simple wrapper
+        email_record = self.register_email(recipient, message, subject)
+        return self.send_email_by_record(email_record)
+
     def track_open(self, email_id: str) -> bool:
         email = self.repository.get_by_id(email_id)
         if email:
             if email.status != "OPENED":
-                # FILTER: If hit happens within 5 seconds of creation, it's likely an automated delivery scan
+                # FILTER: If hit happens within 30 seconds of creation, it's likely an automated delivery scan
                 time_since_creation = (datetime.utcnow() - email.created_at).total_seconds()
-                if time_since_creation < 5:
+                if time_since_creation < 30:
                     logger.warning(f"Ignoring instant tracking hit (delivery scan): {email_id} ({time_since_creation:.1f}s)")
                     return False
 
@@ -139,13 +153,16 @@ class EmailService:
                 try:
                     recipient = db.session.query(CampaignRecipient).filter_by(email_id=email_id).first()
                     if recipient:
+                        logger.info(f"Syncing status for CampaignRecipient: {recipient.email} (Campaign: {recipient.campaign_id})")
                         recipient.status = "OPENED"
                         db.session.commit()
                         logger.info(f"Synchronized status for campaign recipient: {recipient.email}")
+                    else:
+                        logger.info(f"No CampaignRecipient found linked to email_id: {email_id}")
                 except Exception as sync_err:
                     logger.error(f"Failed to synchronize status with CampaignRecipient: {sync_err}")
 
-                logger.info(f"Email opened: {email_id} after {time_since_creation:.1f}s")
+                logger.info(f"Email {email_id} ({email.recipient_email}) marked as OPENED after {time_since_creation:.1f}s")
                 return True
             else:
                 logger.info(f"Email {email_id} was already opened. Ignoring idempotently.")
@@ -161,9 +178,29 @@ class EmailService:
         opened_emails = sum(1 for e in emails if e.status == "OPENED")
         open_rate = (opened_emails / total_emails * 100) if total_emails > 0 else 0
         
+        # Enrich emails with campaign info
+        enriched_emails = []
+        for e in emails:
+            email_dict = e.to_dict()
+            try:
+                # Find associated campaign through CampaignRecipient
+                recipient = db.session.query(CampaignRecipient).filter_by(email_id=e.id).first()
+                if recipient and recipient.campaign:
+                    email_dict['campaign_id'] = recipient.campaign.id
+                    email_dict['campaign_name'] = recipient.campaign.name
+                else:
+                    email_dict['campaign_id'] = None
+                    email_dict['campaign_name'] = "Single Send"
+            except Exception as enrich_err:
+                logger.error(f"Failed to enrich email {e.id} with campaign data: {enrich_err}")
+                email_dict['campaign_id'] = None
+                email_dict['campaign_name'] = "Unknown"
+            
+            enriched_emails.append(email_dict)
+
         return {
             "total_emails": total_emails,
             "opened_emails": opened_emails,
             "open_rate": float(f"{open_rate:.1f}"),
-            "emails": [e.to_dict() for e in emails]
+            "emails": enriched_emails
         }
