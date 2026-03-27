@@ -141,6 +141,6 @@ class EmailService:
         return {
             "total_emails": total_emails,
             "opened_emails": opened_emails,
-            "open_rate": round(open_rate, 1),
+            "open_rate": float(f"{open_rate:.1f}"),
             "emails": [e.to_dict() for e in emails]
         }
