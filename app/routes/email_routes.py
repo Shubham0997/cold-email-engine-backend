@@ -31,6 +31,7 @@ def send_single_email():
 
     email = data.get('email')
     message = data.get('message')
+    subject = data.get('subject', 'Quick Message')
 
     if not email or not is_valid_email(email):
         return jsonify({"error": "A valid 'email' is required"}), 400
@@ -39,7 +40,7 @@ def send_single_email():
         return jsonify({"error": "'message' cannot be empty"}), 400
 
     try:
-        email_record = service.send_single_email(email, message)
+        email_record = service.send_single_email(email, message, subject)
         return jsonify({
             "email_id": email_record.id,
             "status": email_record.status
@@ -52,12 +53,20 @@ def send_single_email():
 def track_open(email_id):
     ua = request.headers.get('User-Agent', 'Unknown')
     referer = request.headers.get('Referer', 'None')
-    logger.info(f"Tracking hit for {email_id} | UA: {ua} | Referer: {referer}")
+    ip = request.remote_addr
+    logger.info(f"Tracking hit for {email_id} | IP: {ip} | UA: {ua} | Referer: {referer}")
     
-    # Filter out known prefetchers/proxies to avoid false opens
-    # GoogleImageProxy is the main one for Gmail
-    if "GoogleImageProxy" in ua or "Google-Proxy-Image-Transport" in ua:
-        logger.info(f"Ignoring tracking hit from Gmail Proxy/Prefetcher: {ua}")
+    # Comprehensive Bot/Prefetcher Filtering
+    bot_keywords = [
+        "GoogleImageProxy", "Google-Proxy-Image-Transport", "Google-Apps-Scripter",
+        "Baiduspider", "Bingbot", "YahooMailProxy", "AolMailProxy", "Outlook-iOS",
+        "Microsoft Office", "Apache-HttpClient", "Python-urllib", "node-fetch"
+    ]
+    
+    is_bot = any(keyword in ua for keyword in bot_keywords)
+    
+    if is_bot:
+        logger.info(f"Ignoring bot-like tracking hit: {ua}")
     else:
         try:
             service.track_open(email_id)

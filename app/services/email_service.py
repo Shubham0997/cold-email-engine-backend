@@ -34,14 +34,15 @@ class EmailService:
         """
         return html
 
-    def send_single_email(self, recipient: str, message: str) -> Email:
-        email_record = Email(recipient_email=recipient, body=message, status="PENDING")
+    def send_single_email(self, recipient: str, message: str, subject: str = "Quick Message") -> Email:
+        email_record = Email(recipient_email=recipient, body=message, subject=subject, status="PENDING")
         self.repository.create(email_record)
-
+        
+        # ... later in the code ...
         html_content = self.construct_html(message, email_record.id)
 
         msg = MIMEMultipart("alternative")
-        msg['Subject'] = email_record.subject
+        msg['Subject'] = subject
         msg['From'] = self.smtp_user or "noreply@coldemailengine.local"
         msg['To'] = recipient
 
