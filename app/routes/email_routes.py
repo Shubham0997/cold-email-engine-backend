@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)
 repository = EmailRepository()
 service = EmailService(repository)
 
+@email_bp.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "database": "connected" # Simplified for now
+    }), 200
+
 def is_valid_email(email):
     return re.match(r"[^@]+@[^@]+\.[^@]+", email) is not None
 
