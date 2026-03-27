@@ -80,8 +80,6 @@ class EmailService:
                         # For Port 587
                         server = smtplib.SMTP(local_hostname=local_hostname)
                     
-                    # Crucial: set _host so starttls() knows the hostname for SSL verification
-                    server._host = self.smtp_host
                     server.sock = sock
                     server.file = sock.makefile('rb')
                     
@@ -94,7 +92,8 @@ class EmailService:
                     
                     if self.smtp_port != 465:
                         # 3. Start TLS for port 587
-                        server.starttls()
+                        # Use explicit server_hostname to avoid ValueError
+                        server.starttls(server_hostname=self.smtp_host)
                         server.ehlo_or_helo_if_needed()
                     
                     with server:
