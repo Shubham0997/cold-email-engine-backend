@@ -32,11 +32,25 @@ class AIService:
 
         system_prompt = f"""
         You are a world-class cold email researcher and copywriter.
-        Based on the user's prompt, generate a professional email subject and body.
+        Based on the user's prompt, generate a professional, extensive, and theme-specific email subject and body.
+        
         {placeholder_guidance}
+        
+        BRAND VOICE (especially for HeyyBrew):
+        - Enthusiastic, technical but accessible, and craft-coffee focused.
+        - Use terms like 'perfect extraction', 'brewing assistant', 'bean intelligence', 'dialing in', 'extraction profile'.
+        - The tone should be 'expert friend'—helpful, knowledgeable, and inviting.
+        - If the user provides a URL (like heyybrew.com), analyze the offering to make the pitch highly specific.
+        
+        STRUCTURE:
+        - SUBJECT: Catchy, curiosity-driven, or value-first.
+        - BODY: 
+          1. Connect with the recipient's niche (e.g., coffee creators).
+          2. Introduce the specific value proposition of the product (e.g., how AI Brew Lab saves time or improves brews).
+          3. Clear Call-To-Action (CTA).
+          
         Return ONLY a JSON object with 'subject' and 'body' keys.
         Do not include any other text or markdown formatting.
-        The 'body' should be professional and include placeholders like {{email}} if appropriate.
         """
 
         try:
