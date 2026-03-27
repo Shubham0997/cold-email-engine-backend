@@ -13,10 +13,11 @@ logger = logging.getLogger(__name__)
 class EmailService:
     def __init__(self, repository: EmailRepository):
         self.repository = repository
-        self.smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
-        self.smtp_port = int(os.getenv('SMTP_PORT', 587))
-        self.smtp_user = os.getenv('SMTP_USER')
-        self.smtp_pass = os.getenv('SMTP_PASS')
+        # Sanitize all env variables to avoid hidden characters/spaces
+        self.smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com').strip()
+        self.smtp_port = int(str(os.getenv('SMTP_PORT', '587')).strip())
+        self.smtp_user = os.getenv('SMTP_USER', '').strip() or None
+        self.smtp_pass = os.getenv('SMTP_PASS', '').strip() or None
     
     def construct_html(self, body: str, email_id: str) -> str:
         tracking_base = os.getenv('TRACKING_BASE_URL', 'http://localhost:5000')
@@ -54,8 +55,14 @@ class EmailService:
                 
                 # Manual socket creation to bypass getaddrinfo EBUSY issue on Vercel
                 try:
-                    # Resolve IP once
-                    ip = socket.gethostbyname(self.smtp_host)
+                    # Resolve IP with fallback to known Gmail SMTP IPs if DNS is broken on Vercel
+                    try:
+                        ip = socket.gethostbyname(self.smtp_host)
+                        logger.info(f"Resolved {self.smtp_host} to {ip}")
+                    except Exception as dns_err:
+                        logger.warning(f"DNS resolution failed for {self.smtp_host}: {dns_err}. Using fallback IP.")
+                        # Common IPs for smtp.gmail.com
+                        ip = "142.251.2.108" 
                     
                     # Create raw socket
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
