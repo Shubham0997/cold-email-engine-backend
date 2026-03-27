@@ -3,6 +3,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 import logging
+import socket
 from app.domain.models import Email
 from app.repository.email_repository import EmailRepository
 from datetime import datetime
@@ -51,16 +52,26 @@ class EmailService:
                 local_hostname = "cold-email-engine.local"
                 logger.info(f"Attempting to send email via {self.smtp_host}:{self.smtp_port} (User: {self.smtp_user})")
                 
+                # Manual resolution to IPv4 can bypass [Errno 16] DNS issues on Vercel
+                try:
+                    addr_info = socket.getaddrinfo(self.smtp_host, self.smtp_port, family=socket.AF_INET, type=socket.SOCK_STREAM)
+                    resolved_ip = addr_info[0][4][0]
+                    logger.info(f"Resolved {self.smtp_host} to {resolved_ip}")
+                    target_host = resolved_ip
+                except Exception as dns_err:
+                    logger.warning(f"Manual DNS resolution failed: {dns_err}. Falling back to hostname.")
+                    target_host = self.smtp_host
+
                 if self.smtp_port == 465:
                     logger.info("Using SMTP_SSL (Port 465)")
-                    with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
+                    with smtplib.SMTP_SSL(target_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
                         logger.info("SMTP_SSL connection established, attempting login...")
                         server.login(self.smtp_user, self.smtp_pass)
                         logger.info("SMTP login successful, sending message...")
                         server.send_message(msg)
                 else:
                     logger.info(f"Using SMTP with STARTTLS (Port {self.smtp_port})")
-                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
+                    with smtplib.SMTP(target_host, self.smtp_port, timeout=10, local_hostname=local_hostname) as server:
                         logger.info("SMTP connection established, starting TLS...")
                         server.starttls()
                         logger.info("STARTTLS successful, attempting login...")
