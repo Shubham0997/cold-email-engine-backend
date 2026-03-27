@@ -4,8 +4,9 @@ from email.mime.multipart import MIMEMultipart
 import os
 import logging
 import socket
-from app.domain.models import Email
+from app.domain.models import Email, CampaignRecipient
 from app.repository.email_repository import EmailRepository
+from app import db
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,17 @@ class EmailService:
                 email.status = "OPENED"
                 email.opened_at = datetime.utcnow()
                 self.repository.update(email)
+                
+                # ALSO Update CampaignRecipient if this email belongs to a campaign
+                try:
+                    recipient = db.session.query(CampaignRecipient).filter_by(email_id=email_id).first()
+                    if recipient:
+                        recipient.status = "OPENED"
+                        db.session.commit()
+                        logger.info(f"Synchronized status for campaign recipient: {recipient.email}")
+                except Exception as sync_err:
+                    logger.error(f"Failed to synchronize status with CampaignRecipient: {sync_err}")
+
                 logger.info(f"Email opened: {email_id} after {time_since_creation:.1f}s")
                 return True
             else:
@@ -145,6 +157,7 @@ class EmailService:
     def get_dashboard_stats(self) -> dict:
         emails = self.repository.get_all()
         total_emails = len(emails)
+        logger.info(f"Dashboard Stats: Fetched {total_emails} email records from database.")
         opened_emails = sum(1 for e in emails if e.status == "OPENED")
         open_rate = (opened_emails / total_emails * 100) if total_emails > 0 else 0
         
