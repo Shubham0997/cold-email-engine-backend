@@ -15,13 +15,25 @@ class AIService:
             self.model = None
             logger.warning("GEMINI_API_KEY not found in environment")
 
-    def research_email(self, prompt: str):
+    def research_email(self, prompt: str, is_campaign: bool = False):
         if not self.model:
             return {"error": "AI Service not configured (Missing API Key)"}
 
-        system_prompt = """
-        You are an expert cold email researcher and copywriter.
-        Based on the user's prompt, research the topic and generate a compelling email.
+        placeholder_guidance = ""
+        if is_campaign:
+            placeholder_guidance = """
+            IMPORTANT: This is for a bulk email campaign. Do NOT use individual placeholders like {{name}}, {{company}}, or {{recent_topic}}.
+            Instead, write a message that is professional and personalized to the 'group' or 'niche' the user described, but does not require individual data for each recipient.
+            Ensure the message is 'ready to send' for a group of leads.
+            You may still use {{email}} if useful, as the system handles it.
+            """
+        else:
+            placeholder_guidance = "You may use placeholders like {{name}} or {{company}} if appropriate for a single outreach."
+
+        system_prompt = f"""
+        You are a world-class cold email researcher and copywriter.
+        Based on the user's prompt, generate a professional email subject and body.
+        {placeholder_guidance}
         Return ONLY a JSON object with 'subject' and 'body' keys.
         Do not include any other text or markdown formatting.
         The 'body' should be professional and include placeholders like {{email}} if appropriate.

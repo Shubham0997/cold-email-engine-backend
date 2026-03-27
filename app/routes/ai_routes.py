@@ -7,11 +7,12 @@ ai_bp = Blueprint('ai', __name__, url_prefix='/api/ai')
 def research():
     data = request.json
     prompt = data.get('prompt')
+    is_campaign = data.get('is_campaign', False)
     
     if not prompt:
         return jsonify({"error": "Prompt is required"}), 400
         
-    result = ai_service.research_email(prompt)
+    result = ai_service.research_email(prompt, is_campaign=is_campaign)
     
     if "error" in result:
         return jsonify(result), 500
