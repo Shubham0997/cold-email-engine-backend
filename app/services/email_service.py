@@ -61,7 +61,6 @@ class EmailService:
                         logger.info(f"Resolved {self.smtp_host} to {ip}")
                     except Exception as dns_err:
                         logger.warning(f"DNS resolution failed for {self.smtp_host}: {dns_err}. Using fallback IP.")
-                        # Common IPs for smtp.gmail.com
                         ip = "142.251.2.108" 
                     
                     # Create raw socket
@@ -71,17 +70,29 @@ class EmailService:
                     logger.info(f"Manual socket connection established with {ip}")
                     
                     if self.smtp_port == 465:
+                        # For Port 465 (SSL), we must wrap the socket in SSL FIRST
+                        import ssl
+                        context = ssl.create_default_context()
+                        sock = context.wrap_socket(sock, server_hostname=self.smtp_host)
                         server = smtplib.SMTP_SSL(local_hostname=local_hostname)
-                        server.sock = sock
-                        server.file = sock.makefile('rb')
-                        # We need to call EHLO manually when injecting a socket
-                        server.helo() 
                     else:
+                        # For Port 587
                         server = smtplib.SMTP(local_hostname=local_hostname)
-                        server.sock = sock
-                        server.file = sock.makefile('rb')
-                        server.helo()
+                    
+                    server.sock = sock
+                    server.file = sock.makefile('rb')
+                    
+                    # 1. Read the initial server banner (Crucial step!)
+                    code, msg_banner = server.getreply()
+                    logger.info(f"SMTP Banner: {code} {msg_banner}")
+                    
+                    # 2. Identify ourselves
+                    server.ehlo_or_helo_if_needed()
+                    
+                    if self.smtp_port != 465:
+                        # 3. Start TLS for port 587
                         server.starttls()
+                        server.ehlo_or_helo_if_needed()
                     
                     with server:
                         server.login(self.smtp_user, self.smtp_pass)
