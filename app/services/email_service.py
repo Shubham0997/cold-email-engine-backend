@@ -124,10 +124,10 @@ class EmailService:
         email = self.repository.get_by_id(email_id)
         if email:
             if email.status != "OPENED":
-                # FILTER: If hit happens within 15 seconds of creation, it's likely an automated delivery check
+                # FILTER: If hit happens within 5 seconds of creation, it's likely an automated delivery scan
                 time_since_creation = (datetime.utcnow() - email.created_at).total_seconds()
-                if time_since_creation < 15:
-                    logger.warning(f"Ignoring instant tracking hit (automated scan): {email_id} ({time_since_creation:.1f}s)")
+                if time_since_creation < 5:
+                    logger.warning(f"Ignoring instant tracking hit (delivery scan): {email_id} ({time_since_creation:.1f}s)")
                     return False
 
                 email.status = "OPENED"
