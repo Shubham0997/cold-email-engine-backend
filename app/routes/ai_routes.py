@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
 from app.services.ai_service import ai_service
+from app.middleware.auth_middleware import require_auth
 
 ai_bp = Blueprint('ai', __name__, url_prefix='/api/ai')
 
 @ai_bp.route('/research', methods=['POST'])
+@require_auth
 def research():
     data = request.json
     prompt = data.get('prompt')
@@ -20,6 +22,7 @@ def research():
     return jsonify(result)
 
 @ai_bp.route('/leads', methods=['POST'])
+@require_auth
 def leads():
     data = request.json
     prompt = data.get('prompt')

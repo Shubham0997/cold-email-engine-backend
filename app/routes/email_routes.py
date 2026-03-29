@@ -1,10 +1,11 @@
-from flask import Blueprint, request, jsonify, send_file, make_response, Response
+from flask import Blueprint, request, jsonify, send_file, make_response, Response, g
 import re
 from datetime import datetime
 import io
 import logging
 from app.services.email_service import EmailService
 from app.repository.email_repository import EmailRepository
+from app.middleware.auth_middleware import require_auth
 
 email_bp = Blueprint('email', __name__)
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ def is_valid_email(email):
     return re.match(r"[^@]+@[^@]+\.[^@]+", email) is not None
 
 @email_bp.route('/email/send-single', methods=['POST'])
+@require_auth
 def send_single_email():
     data = request.get_json()
     if not data:
@@ -40,7 +42,8 @@ def send_single_email():
         return jsonify({"error": "'message' cannot be empty"}), 400
 
     try:
-        email_record = service.send_single_email(email, message, subject)
+        user_id = g.user['uid']
+        email_record = service.send_single_email(email, message, subject, user_id=user_id)
         return jsonify({
             "email_id": email_record.id,
             "status": email_record.status
@@ -62,8 +65,6 @@ def track_open(email_id):
     logger.info(f"--- TRACKING HIT END ---")
     
     # Comprehensive Bot/Prefetcher Filtering
-    # We REMOVE GoogleImageProxy from here because Gmail users always hit via this proxy.
-    # We will rely on the COOLDOWN filter in the service layer instead.
     bot_keywords = [
         "Baiduspider", "Bingbot", "Apache-HttpClient", "Python-urllib", "node-fetch"
     ]
@@ -88,9 +89,11 @@ def track_open(email_id):
     return response
 
 @email_bp.route('/email/stats', methods=['GET'])
+@require_auth
 def get_stats():
     try:
-        stats = service.get_dashboard_stats()
+        user_id = g.user['uid']
+        stats = service.get_dashboard_stats(user_id=user_id)
         return jsonify(stats), 200
     except Exception as e:
         logger.error(f"Failed to fetch stats: {e}")

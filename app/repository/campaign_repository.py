@@ -17,11 +17,17 @@ class CampaignRepository:
     def get_by_id(self, campaign_id: str) -> Campaign:
         return db.session.query(Campaign).options(joinedload(Campaign.recipients)).filter_by(id=campaign_id).first()
 
-    def get_all(self) -> list[Campaign]:
-        return db.session.query(Campaign).options(joinedload(Campaign.recipients)).order_by(Campaign.created_at.desc()).all()
+    def get_all(self, user_id: str = None) -> list[Campaign]:
+        query = db.session.query(Campaign).options(joinedload(Campaign.recipients))
+        if user_id:
+            query = query.filter(Campaign.user_id == user_id)
+        return query.order_by(Campaign.created_at.desc()).all()
 
-    def get_by_name(self, name: str) -> Campaign:
-        return db.session.query(Campaign).options(joinedload(Campaign.recipients)).filter_by(name=name).first()
+    def get_by_name(self, name: str, user_id: str = None) -> Campaign:
+        query = db.session.query(Campaign).options(joinedload(Campaign.recipients)).filter_by(name=name)
+        if user_id:
+            query = query.filter(Campaign.user_id == user_id)
+        return query.first()
 
     def add_recipient(self, recipient: CampaignRecipient) -> CampaignRecipient:
         try:

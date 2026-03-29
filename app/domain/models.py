@@ -2,10 +2,33 @@ from datetime import datetime
 import uuid
 from app import db
 
+class SmtpConfig(db.Model):
+    __tablename__ = 'smtp_configs'
+    
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    smtp_host = db.Column(db.String(255), nullable=False)
+    smtp_port = db.Column(db.Integer, nullable=False, default=587)
+    smtp_user = db.Column(db.String(255), nullable=False)
+    smtp_pass = db.Column(db.String(512), nullable=False) # Encrypted
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "smtp_host": self.smtp_host,
+            "smtp_port": self.smtp_port,
+            "smtp_user": self.smtp_user,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() + "Z" if self.updated_at else None
+        }
+
 class Email(db.Model):
     __tablename__ = 'emails'
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = db.Column(db.String(128), nullable=True, index=True)  # Firebase UID
     recipient_email = db.Column(db.String(255), nullable=False, index=True)
     subject = db.Column(db.String(255), default="Quick Message")
     body = db.Column(db.Text, nullable=False)
@@ -28,7 +51,8 @@ class Campaign(db.Model):
     __tablename__ = 'campaigns'
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = db.Column(db.String(255), nullable=False, unique=True)
+    user_id = db.Column(db.String(128), nullable=True, index=True)  # Firebase UID
+    name = db.Column(db.String(255), nullable=False)
     subject = db.Column(db.String(255), nullable=False)
     body = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(50), default="DRAFT") # DRAFT, SENDING, COMPLETED
