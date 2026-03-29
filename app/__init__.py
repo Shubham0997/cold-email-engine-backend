@@ -54,8 +54,9 @@ def create_app():
                 "type": "service_account",
                 "project_id": project_id,
                 "client_email": client_email,
-                # Vercel sometimes escapes newlines in private keys, we need to unescape them
                 "private_key": private_key.replace("\\n", "\n"),
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
             })
             firebase_admin.initialize_app(cred)
             logger.info("Firebase Admin SDK initialized with env var credentials.")
