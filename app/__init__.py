@@ -35,28 +35,45 @@ def create_app():
 
     # Initialize Firebase Admin SDK
     if not firebase_admin._apps:
-        cred_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-        
-        # Auto-discover service account key in the backend directory
-        if not cred_path:
-            basedir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-            local_key = os.path.join(basedir, 'firebase-service-account.json')
-            if os.path.exists(local_key):
-                cred_path = local_key
+        # Option 1: Explicit env vars (for Vercel production)
+        project_id = os.getenv('FIREBASE_PROJECT_ID')
+        client_email = os.getenv('FIREBASE_CLIENT_EMAIL')
+        private_key = os.getenv('FIREBASE_PRIVATE_KEY')
 
-        if cred_path and os.path.exists(cred_path):
-            cred = credentials.Certificate(cred_path)
+        if project_id and client_email and private_key:
+            cred = credentials.Certificate({
+                "type": "service_account",
+                "project_id": project_id,
+                "client_email": client_email,
+                # Vercel sometimes escapes newlines in private keys, we need to unescape them
+                "private_key": private_key.replace("\\n", "\n"),
+            })
             firebase_admin.initialize_app(cred)
-            logger.info(f"Firebase Admin SDK initialized with credentials from: {cred_path}")
+            logger.info("Firebase Admin SDK initialized with env var credentials.")
         else:
-            try:
-                firebase_admin.initialize_app()
-                logger.info("Firebase Admin SDK initialized with default credentials.")
-            except Exception as e:
-                logger.warning(
-                    f"Firebase Admin SDK could not be initialized: {e}. "
-                    f"Place firebase-service-account.json in the backend/ directory."
-                )
+            # Option 2: JSON file (for local development)
+            cred_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+            
+            if not cred_path:
+                basedir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+                local_key = os.path.join(basedir, 'firebase-service-account.json')
+                if os.path.exists(local_key):
+                    cred_path = local_key
+
+            if cred_path and os.path.exists(cred_path):
+                cred = credentials.Certificate(cred_path)
+                firebase_admin.initialize_app(cred)
+                logger.info(f"Firebase Admin SDK initialized with credentials from: {cred_path}")
+            else:
+                try:
+                    firebase_admin.initialize_app()
+                    logger.info("Firebase Admin SDK initialized with default credentials.")
+                except Exception as e:
+                    logger.warning(
+                        f"Firebase Admin SDK could not be initialized: {e}. "
+                        f"Set FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY env vars "
+                        f"or place firebase-service-account.json in the backend/ directory."
+                    )
 
     # Setup DB
     db.init_app(app)
