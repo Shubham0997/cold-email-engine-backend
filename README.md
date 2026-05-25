@@ -4,7 +4,7 @@ The MailFlow AI backend is a Flask-based REST API that orchestrates AI-powered o
 
 ## 🚀 Key Features
 
-- **Gemini AI Integration**: Services for brand-specific research and lead generation.
+- **OpenAI Integration**: Services for brand-specific research and lead generation.
 - **Campaign Orchestration**: Full lifecycle management of bulk email sequences.
 - **High-Performance SMTP**: Optimized delivery via intelligent connection reuse.
 - **Open Tracking**: Automatic pixel injection and real-time event logging.
@@ -87,7 +87,7 @@ erDiagram
 - **Framework**: Flask (Python 3.10+)
 - **ORM**: SQLAlchemy (Flask-SQLAlchemy)
 - **Database**: PostgreSQL / SQLite
-- **AI**: Google Generative AI (Gemini)
+- **AI**: OpenAI API
 
 ## 📁 Project Structure
 
